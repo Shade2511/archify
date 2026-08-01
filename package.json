@@ -1,8 +1,15 @@
 {
   "name": "archify",
   "displayName": "Archify",
-  "description": "",
+  "description": "Visualize and annotate your codebase architecture on an interactive canvas directly inside VS Code. Select code in any file, drop pointers onto the canvas, and navigate back to the source with a single click.",
   "version": "0.0.1",
+  "publisher": "Shade2511",
+  "license": "MIT",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Shade2511/archify.git"
+  },
   "engines": {
     "vscode": "^1.125.0"
   },

@@ -1,71 +1,42 @@
-# archify README
+# Archify
 
-This is the README for your extension "archify". After writing up a brief description, we recommend including the following sections.
+Archify turns your codebase into an interactive architecture map. Select code in any file, drop it onto a canvas as a pointer, and build a living diagram that stays in sync with your work — then jump back to the source with a single click.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- **Canvas-based architecture mapping**: An interactive whiteboard (powered by tldraw) rendered in a VS Code webview.
+- **One-click code pointers**: Highlight any selection in the editor and run **Archify: Make Pointer** to pin it to the canvas, along with its file path and line range.
+- **Navigate back to code**: Click any pointer shape on the canvas to open the referenced file and reveal the exact selection in the editor.
+- **Project-persistent canvas**: Your diagram is automatically saved to `.archify/canvas.json` in the workspace, so it travels with the project and is restored every time the webview opens.
+- **Queued pointer delivery**: Selections made before the canvas finishes loading are delivered as soon as the webview is ready.
 
-For example if there is an image subfolder under your extension project workspace:
+## Usage
 
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+1. Open the architecture canvas with **Archify: Open Webview** (or from the editor context menu).
+2. Select code in any file, right-click, and choose **Archify: Make Pointer**.
+3. Position the pointer shapes on the canvas to document your architecture.
+4. Click a pointer to jump straight to the referenced code.
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+No special requirements. Archify works with any language — the pointer references are plain text selections tied to file paths and line numbers.
 
 ## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+This extension does not currently contribute any settings.
 
 ## Known Issues
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+None at this time.
 
 ## Release Notes
 
-Users appreciate release notes as you update your extension.
+### 0.0.1
 
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+Initial release: canvas-based architecture mapping, code pointers, source navigation, and project-persistent canvas storage.
 
 ---
 
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
 ## For more information
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+- Report issues and request features at the [GitHub repository](https://github.com/Shade2511/archify).

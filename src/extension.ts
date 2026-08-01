@@ -44,6 +44,11 @@ export function activate(context: vscode.ExtensionContext) {
                     // Send the persisted canvas (if any) to the freshly mounted webview
                     const snapshot = await readCanvasFile(getCanvasFileUri(context));
                     if (snapshot && currentPanel) {
+                        // Migrate any legacy absolute pointer paths to workspace-relative
+                        // paths so the committed canvas stays portable across machines.
+                        if (migrateSnapshotPaths(snapshot)) {
+                            await saveCanvasFile(getCanvasFileUri(context), snapshot);
+                        }
                         await currentPanel.webview.postMessage({ command: 'loadDocument', snapshot });
                     }
                     // Flush any MakePointer actions that ran before the webview was ready
@@ -115,9 +120,11 @@ export function activate(context: vscode.ExtensionContext) {
                     preview = `${words.slice(0, 3).join(" ")} ... ${words.slice(-3).join(" ")}`;
                 }
 
-                // Pack the data
+                // Pack the data. Store a workspace-relative path so the canvas
+                // file can be committed to the repo and works on any machine.
+                // Files outside the workspace fall back to their absolute path.
                 const data = {
-                    filePath: editor.document.uri.fsPath,
+                    filePath: vscode.workspace.asRelativePath(editor.document.uri),
                     startLine: selection.start.line + 1,
                     endLine: selection.end.line + 1,
                     preview: preview
@@ -148,14 +155,36 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() {}
 
-// Open the referenced file and highlight/reveal the selected line range.
+// Resolve a stored pointer path to a file URI. New pointers are stored
+// workspace-relative (e.g. "src/foo.ts") so the canvas is portable; legacy
+// pointers store absolute paths. Both are handled here.
+function resolvePointerUri(storedPath: string): vscode.Uri | undefined {
+    if (path.isAbsolute(storedPath)) {
+        return vscode.Uri.file(storedPath);
+    }
+    const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
+    if (!folder) {
+        return undefined;
+    }
+    return vscode.Uri.joinPath(folder, storedPath);
+}
+
+// Open the referenced file, switch to it, and highlight/reveal the selected line
+// range so the user lands directly on the pointer's code.
 async function navigateToCode(data: { filePath?: string; startLine?: number; endLine?: number }) {
     if (!data?.filePath || typeof data.startLine !== 'number') {
         return;
     }
     try {
-        const document = await vscode.workspace.openTextDocument(vscode.Uri.file(data.filePath));
-        const editor = await vscode.window.showTextDocument(document, vscode.ViewColumn.One);
+        const uri = resolvePointerUri(data.filePath);
+        if (!uri) {
+            vscode.window.showErrorMessage(`Could not locate the file for this pointer: ${data.filePath}`);
+            return;
+        }
+        const document = await vscode.workspace.openTextDocument(uri);
+        const editor = await vscode.window.showTextDocument(document, {
+            viewColumn: vscode.ViewColumn.One,
+        });
         const start = new vscode.Position(Math.max(0, data.startLine - 1), 0);
         const end = new vscode.Position(Math.max(0, (data.endLine ?? data.startLine) - 1), 0);
         const range = new vscode.Range(start, end);
@@ -197,6 +226,39 @@ async function readCanvasFile(uri: vscode.Uri | undefined): Promise<unknown | un
         console.error('Failed to read canvas file:', error);
         return undefined;
     }
+}
+
+// Rewrite any pointer shapes whose meta.filePath is an absolute path that lives
+// inside the current workspace so it is stored workspace-relative. Returns true
+// if anything changed (so the migrated canvas can be written back to disk).
+function migrateSnapshotPaths(snapshot: unknown): boolean {
+    const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
+    if (!folder) {
+        return false;
+    }
+    const root = folder.fsPath;
+    const record = snapshot as {
+        document?: { shapes?: Array<{ meta?: { filePath?: unknown } }> };
+    };
+    const shapes = record?.document?.shapes;
+    if (!Array.isArray(shapes)) {
+        return false;
+    }
+    let changed = false;
+    for (const shape of shapes) {
+        const meta = shape?.meta;
+        const filePath = meta?.filePath;
+        if (!meta || typeof filePath !== 'string' || !path.isAbsolute(filePath)) {
+            continue;
+        }
+        const relative = path.relative(root, filePath);
+        if (relative.startsWith('..') || path.isAbsolute(relative)) {
+            continue;
+        }
+        meta.filePath = relative.split(path.sep).join('/');
+        changed = true;
+    }
+    return changed;
 }
 
 function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri) {
