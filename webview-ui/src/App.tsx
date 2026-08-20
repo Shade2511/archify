@@ -1,6 +1,6 @@
 // @ts-expect-error LicenseManager is a runtime export of @tldraw/tldraw but excluded from its public types
 import { Tldraw, useEditor, createShapeId, LicenseManager } from '@tldraw/tldraw';
-import type { TLEventInfo } from '@tldraw/tldraw';
+import type { TLEventInfo, TLShapeId, JsonObject } from '@tldraw/tldraw';
 import '@tldraw/tldraw/tldraw.css';
 import { useEffect, Component, useRef } from 'react';
 import type { ReactNode } from 'react';
@@ -73,7 +73,13 @@ function VSCodeListener() {
   const pointerDownScreenPoint = useRef<{ x: number; y: number } | null>(null);
   const lastPointerUpTime = useRef(0);
   const navTimer = useRef<number | undefined>(undefined);
-  const pendingNav = useRef<{ filePath: string; startLine: number; endLine?: number } | null>(null);
+  const pendingNav = useRef<{
+    relativePath: string;
+    symbolName: string;
+    containerName?: string;
+    symbolStart?: { line: number; character: number };
+    signature?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!editor || didInit.current) {
@@ -102,15 +108,24 @@ function VSCodeListener() {
       }
 
       if (message?.command === 'addPointer' && editor) {
-        const { filePath, startLine, endLine } = message.data;
+        const { relativePath, symbolName, containerName, symbolStart, signature } = message.data ?? {};
+
+        if (typeof relativePath !== 'string' || relativePath === '' ||
+            typeof symbolName !== 'string' || symbolName === '') {
+          console.error('Ignoring addPointer with missing relativePath/symbolName:', message.data);
+          return;
+        }
 
         try {
           const shapeId = createShapeId();
+          const viewport = editor.getViewportPageBounds();
+          const cx = viewport.midX - 40;
+          const cy = viewport.midY - 40;
           editor.createShapes([{
             id: shapeId,
             type: 'geo',
-            x: Math.max(80, (window.innerWidth / 2) - 40),
-            y: Math.max(80, (window.innerHeight / 2) - 40),
+            x: Math.max(80, cx),
+            y: Math.max(80, cy),
             props: {
               geo: 'ellipse',
               color: 'light-blue',
@@ -120,11 +135,40 @@ function VSCodeListener() {
               w: 80,
               h: 80,
             },
-            meta: { filePath, startLine, endLine },
+            meta: {
+              relativePath,
+              symbolName,
+              // tldraw's jsonValue validator rejects `undefined` values inside
+              // shape meta, so only set keys that are actually defined.
+              ...(containerName !== undefined ? { containerName } : {}),
+              ...(symbolStart !== undefined ? { symbolStart } : {}),
+              ...(signature !== undefined ? { signature } : {}),
+            },
           }]);
           editor.bringToFront([shapeId]);
         } catch (error) {
           console.error('Failed to create pointer shape:', error);
+        }
+      }
+
+      if (message?.command === 'updatePointers' && editor) {
+        const { pointers } = message as { pointers?: Array<{ shapeId: string; meta: Record<string, unknown> }> };
+        if (!Array.isArray(pointers) || pointers.length === 0) {
+          return;
+        }
+        try {
+          const updates = pointers
+            .filter((entry) => typeof entry.shapeId === 'string' && entry.meta && typeof entry.meta === 'object')
+            .map((entry) => ({
+              id: entry.shapeId as TLShapeId,
+              type: 'geo' as const,
+              meta: entry.meta as Partial<JsonObject>,
+            }));
+          if (updates.length > 0) {
+            editor.updateShapes(updates);
+          }
+        } catch (error) {
+          console.error('Failed to update pointer shapes:', error);
         }
       }
     };
@@ -165,12 +209,20 @@ function VSCodeListener() {
       }
       const point = editor.inputs.getCurrentPagePoint();
       const hit = editor.getShapeAtPoint(point, { hitInside: true, hitLabels: true });
-      const meta = hit?.meta as { filePath?: string; startLine?: number; endLine?: number } | undefined;
-      if (meta?.filePath && typeof meta.startLine === 'number') {
+      const meta = hit?.meta as {
+        relativePath?: string;
+        symbolName?: string;
+        containerName?: string;
+        symbolStart?: { line: number; character: number };
+        signature?: string;
+      } | undefined;
+      if (meta?.relativePath && meta.symbolName) {
         pendingNav.current = {
-          filePath: meta.filePath,
-          startLine: meta.startLine,
-          endLine: meta.endLine,
+          relativePath: meta.relativePath,
+          symbolName: meta.symbolName,
+          containerName: meta.containerName,
+          symbolStart: meta.symbolStart,
+          signature: meta.signature,
         };
         if (navTimer.current) {
           clearTimeout(navTimer.current);
